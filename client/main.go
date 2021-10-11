@@ -3,15 +3,17 @@ package main
 import (
 	"bytes"
 	"encoding/json"
+	"flag"
 	"math/rand"
 	"net/http"
+	"sync"
 	"time"
 
 	"thread-pool/model"
 )
 
 var (
-	defaultServer = ":8080"
+	defaultServer = "http://localhost:8080"
 )
 
 const (
@@ -24,10 +26,15 @@ var (
 	r = rand.New(s)
 )
 
+var (
+	numClients = flag.Int("num_clients", 1, "numbers of clients to send 100,000 requests")
+)
+
 func submitRequests(url string) {
 	var (
 		req   *model.ClientRequest
 		reqID uint
+		wg    sync.WaitGroup
 	)
 
 	msgLeft := requestsPerClient
@@ -38,28 +45,42 @@ func submitRequests(url string) {
 		}
 		msgLeft -= batch
 
-		for i := 0; i < batch; i++ {
-			req = new(model.ClientRequest)
-			reqID++
-			req.ID = reqID
-			req.Size = r.Intn(model.ReqDataSize)
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			for i := 0; i < batch; i++ {
+				req = new(model.ClientRequest)
+				reqID++
+				req.ID = reqID
+				req.Size = r.Intn(model.ReqDataSize)
 
-			var buf bytes.Buffer
-			err := json.NewEncoder(&buf).Encode(req)
-			if err != nil {
-				panic(err)
-			}
+				buf := new(bytes.Buffer)
+				err := json.NewEncoder(buf).Encode(req)
+				if err != nil {
+					panic(err)
+				}
 
-			resp, err := http.Post(url, "text/json", &buf)
-			if err != nil {
-				panic(err)
+				resp, err := http.Post(url, "text/json", buf)
+				if err != nil {
+					panic(err)
+				}
+				resp.Body.Close()
 			}
-			resp.Body.Close()
-		}
+		}()
 	}
+	wg.Wait()
 }
 
 func main() {
-	url := "http://localhost"
-	submitRequests(url + defaultServer)
+	var wg sync.WaitGroup
+	flag.Parse()
+
+	wg.Add(*numClients)
+	for i := 0; i < *numClients; i++ {
+		go func() {
+			defer wg.Done()
+			submitRequests(defaultServer)
+		}()
+	}
+	wg.Wait()
 }
