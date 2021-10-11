@@ -12,18 +12,14 @@ import (
 	"thread-pool/model"
 )
 
-var (
-	defaultServer = "http://localhost:8080"
-)
-
 const (
 	requestsPerClient = 100000
 	maxBatchSize      = (requestsPerClient / 10) * 2
 )
 
 var (
-	s = rand.NewSource(time.Now().Unix())
-	r = rand.New(s)
+	defaultServer = "http://localhost:8080"
+	r             = rand.New(rand.NewSource(time.Now().Unix()))
 )
 
 var (
